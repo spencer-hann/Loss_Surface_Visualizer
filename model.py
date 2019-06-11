@@ -73,21 +73,28 @@ def plot_data(x, y):
     plt.grid()
     plt.show()
 
-n = Network()
-#p_check(n)
+def main(plot=False, display=True):
+    n = Network()
+    #p_check(n)
 
-x,y = gen_xor(2000)
-n.train(x, y)
+    x,y = gen_xor(2000)
+    n.train(x, y)
 
-y_hat = n(x).sign()
-print(accuracy_score(y.detach(),y_hat.detach()))
+    y_hat = n(x).sign()
+    if display:
+        print(accuracy_score(y.detach(),y_hat.detach()))
 
-#plot_data(x, y)
+    if plot:
+        plot_data(x, y)
 
-x,y = gen_xor(1000)
-y_hat = n(x).sign()
-acc = accuracy_score(y.detach(),y_hat.detach())
-print(acc)
-#plot_data(x,y_hat)
+    x,y = gen_xor(1000)
+    y_hat = n(x).sign()
+    acc = accuracy_score(y.detach(),y_hat.detach())
+    if display:
+        print(acc)
+    if plot:
+        plot_data(x,y_hat)
 
-torch.save(n, f"xsquared_network{acc}")
+    torch.save(n, f"xsquared_network{acc}")
+
+if __name__ == "__main__": main()
