@@ -8,7 +8,7 @@ from torch.nn import functional as F
 
 from sklearn.metrics import accuracy_score
 
-def gen_xor(n):
+def gen_data(n):
     x = torch.rand(n,2) *2 -1
     y = torch.empty(n)
     for i in range(n):
@@ -77,7 +77,7 @@ def main(plot=False, display=True):
     n = Network()
     #p_check(n)
 
-    x,y = gen_xor(2000)
+    x,y = gen_data(2000)
     n.train(x, y)
 
     y_hat = n(x).sign()
@@ -87,7 +87,7 @@ def main(plot=False, display=True):
     if plot:
         plot_data(x, y)
 
-    x,y = gen_xor(1000)
+    x,y = gen_data(1000)
     y_hat = n(x).sign()
     acc = accuracy_score(y.detach(),y_hat.detach())
     if display:

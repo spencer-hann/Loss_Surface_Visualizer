@@ -7,8 +7,6 @@ import pyqtgraph.opengl as gl
 from model import *
 from itertools import islice
 
-nn = t.load('xsquared_network')
-
 ## build a QApplication before building other widgets
 pg.mkQApp()
 
@@ -76,6 +74,39 @@ def create_loss_surface(
 
     return x_values,y_values,surface # surface is really just z_values
 
+def descend_gradient(
+        net,
+        inputs,
+        targets,
+        layer,
+        epochs=100,
+    ):
+    try:
+        scatter = gl.GLScatterItem()
+        view.add(scatter)
+        point = np.empty(epochs,3)
+
+        # lock all weight exept visible layer
+        for i,param in enumerate(net.parameters()):
+            if i != layer:
+                param.requires_grad = False
+
+        for i in range(epochs):
+            for x,y in zip(X,Y):
+                optimizer.zero_grad()
+
+                y_hat = self(x)
+
+                loss = criterion(y_hat, y)
+                loss.backward()
+                optimizer.step()
+
+            if i % 100 == 0: print(i, loss.item())
+
+            points[i,:2] = w[
+    except KeyboardInterrupt:
+        print('Training halted')
+
 #x = np.arange(n) - 5
 #y = np.arange(n) - 5
 #x = np.linspace(0,1,n)
@@ -91,15 +122,10 @@ n = 100
 colors = np.random.rand(n,n,4)
 #colors[:,:,3] = 1
 
-x,y,z = create_loss_surface(
-    nn,
-    *gen_xor(10),
-    2,
-)
-surface.setData(x=x, y=y, z=z, colors=colors)
-
-
 def run_simulation(
+        nn,
+        layer,
+        n = 20,
         open_window = "max",
         orbit_speed = .1,
         ):
@@ -110,11 +136,18 @@ def run_simulation(
     elif open_window:
         view.show()
 
+    data = gen_data(n)
+
+    x,y,z = create_loss_surface(nn, *data, layer,)
+    surface.setData(x=x, y=y, z=z, colors=colors)
+
     while not view.isHidden():
+        descend_gradient(nn, *data, layer)
         view.orbit(orbit_speed,0)
         pg.QtGui.QApplication.processEvents()
 
 def main():
-    run_simulation(orbit_speed=.0)
+    nn = t.load('xsquared_network')
+    run_simulation(nn,2,orbit_speed=.0)
 
 if __name__ == "__main__": main()
