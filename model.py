@@ -46,6 +46,7 @@ class Network(nn.Module):
             loss = criterion(y_hat, y)
             loss.backward()
             optimizer.step()
+        optimizer.zero_grad()
         return loss
 
     def train(self, X, Y, epochs=801, stopping_criterion=1e-2):
