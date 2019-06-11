@@ -5,7 +5,6 @@ import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 
 from model import *
-from itertools import islice
 
 ## build a QApplication before building other widgets
 pg.mkQApp()
@@ -58,19 +57,15 @@ def create_loss_surface(
     y_values = np.linspace(*y_bound,resolution)
     surface = np.empty((len(x_values),len(y_values)))
 
-    name,w = next(islice(net.named_parameters(),layer,None))
-    # 'bias' parameter is 1-dimensional
-    # only equipped here to handle 'bias' and 'weight' named parameters
-    if 'bias' not in name:
-        w = w[sub_layer]
-    w = w.data
+    w = net.get_nth_layer(layer,sub_layer).data
 
     for i,x in enumerate(x_values):
         for j,y in enumerate(y_values):
             w[0] = x
             w[1] = y
             outputs = net.forward(inputs).detach()
-            surface[i,j] = ((outputs - targets)**2).mean().item()
+            #surface[i,j] = ((outputs - targets)**2).mean().item()
+            surface[i,j] = t.nn.MSELoss()(outputs,targets).item()
 
     return x_values,y_values,surface # surface is really just z_values
 
@@ -79,32 +74,37 @@ def descend_gradient(
         inputs,
         targets,
         layer,
-        epochs=100,
+        lr=0.001,
+        momentum=0.9,
+        epochs=4000,
     ):
     try:
-        scatter = gl.GLScatterItem()
-        view.add(scatter)
-        point = np.empty(epochs,3)
+        scatter = gl.GLScatterPlotItem(color=(1,0,0,1))#red
+        view.addItem(scatter)
+        points = np.empty((epochs,3))
 
         # lock all weight exept visible layer
         for i,param in enumerate(net.parameters()):
             if i != layer:
                 param.requires_grad = False
 
+        w = net.get_nth_layer(layer).data
+        w = t.rand(w.shape) *4 -2
+
         for i in range(epochs):
-            for x,y in zip(X,Y):
-                optimizer.zero_grad()
+            loss = net._one_epoch(inputs,targets,lr=lr,momentum=momentum)
 
-                y_hat = self(x)
+            points[i,:2] = w.detach().numpy()[:]
+            points[i,2] = loss.item()
+            #outputs = net.forward(inputs).detach()
+            #points[i,2] = ((outputs - targets)**2).mean().item()
 
-                loss = criterion(y_hat, y)
-                loss.backward()
-                optimizer.step()
+            scatter.setData(pos=points[:i+1,:])
 
-            if i % 100 == 0: print(i, loss.item())
+            pg.QtGui.QApplication.processEvents()
 
-            points[i,:2] = w[
-    except KeyboardInterrupt:
+            if view.isHidden(): return # game over
+    except KeyboardInterrupt: # also game over
         print('Training halted')
 
 #x = np.arange(n) - 5
@@ -141,13 +141,13 @@ def run_simulation(
     x,y,z = create_loss_surface(nn, *data, layer,)
     surface.setData(x=x, y=y, z=z, colors=colors)
 
+    descend_gradient(nn, *data, layer)
     while not view.isHidden():
-        descend_gradient(nn, *data, layer)
         view.orbit(orbit_speed,0)
         pg.QtGui.QApplication.processEvents()
 
 def main():
     nn = t.load('xsquared_network')
-    run_simulation(nn,2,orbit_speed=.0)
+    run_simulation(nn,layer=0,orbit_speed=.04)
 
 if __name__ == "__main__": main()

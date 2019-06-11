@@ -7,6 +7,7 @@ from torch import optim
 from torch.nn import functional as F
 
 from sklearn.metrics import accuracy_score
+from itertools import islice
 
 def gen_data(n):
     x = torch.rand(n,2) *2 -1
@@ -30,30 +31,42 @@ class Network(nn.Module):
         x = F.relu(self.fc1(x))
         return self.fc2(x)
 
-    def train(self, X, Y, epochs=801, stopping_criterion=1e-2):
+    def _one_epoch(self,X,Y,lr=0.001,momentum=.9):
         optimizer = optim.SGD(
                 self.parameters(),
-                lr=0.001,
-                momentum=.9,
+                lr=lr,
+                momentum=momentum,
         )
         criterion = nn.MSELoss()
+        for x,y in zip(X,Y):
+            optimizer.zero_grad()
 
+            y_hat = self(x)
+
+            loss = criterion(y_hat, y)
+            loss.backward()
+            optimizer.step()
+        return loss
+
+    def train(self, X, Y, epochs=801, stopping_criterion=1e-2):
         try:
             for i in range(epochs):
-                for x,y in zip(X,Y):
-                    optimizer.zero_grad()
-
-                    y_hat = self(x)
-
-                    loss = criterion(y_hat, y)
-                    loss.backward()
-                    optimizer.step()
+                loss = self._one_epoch(X,Y)
 
                 if i % 100 == 0: print(i, loss.item())
 
         except KeyboardInterrupt:
             print("\nTraining halted.\n",flush=True)
             return
+
+    def get_nth_layer(self,n,sub_layer=0):
+        name,w = next(islice(self.named_parameters(),n,None))
+        # 'bias' parameter is 1-dimensional
+        # only equipped here to handle 'bias' and 'weight' named parameters
+        if 'bias' not in name:
+            w = w[sub_layer]
+        return w
+
 
 def p_check(n):
     print(n.parameters)
