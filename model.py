@@ -49,7 +49,7 @@ class Network(nn.Module):
         optimizer.zero_grad()
         return loss
 
-    def train(self, X, Y, epochs=801, stopping_criterion=1e-2):
+    def train(self, X, Y, epochs=401, stopping_criterion=1e-2):
         try:
             for i in range(epochs):
                 loss = self._one_epoch(X,Y)

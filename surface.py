@@ -4,9 +4,70 @@ import torch as t
 import pyqtgraph as pg
 import pyqtgraph.opengl as gl
 
+import argparse as ap
+
 from model import *
 from copy import deepcopy
 from time import time
+
+parser = ap.ArgumentParser()
+parser.add_argument("filename",
+    help="Name of the file of the PyTorch neural net to be visualized",
+    type=str
+)
+parser.add_argument("-l","--layer",
+    help="""The error surface will be with respect to the weights in this layer.
+            \nNote: Pytorch stores biases as a separate layer. Layer 0 is the weights
+            from input to hidden, Layer 1 is the biases for that same layer.""",
+    type=int,
+    default=1,
+)
+parser.add_argument("-s","--sub_layer",
+    help="""If a layer contains more than one weights vector, a sub_layer may be
+            specified. For example, layer=0 + sub_layer=1, will show the error
+            surface with respect to the weights between the second neuron in the
+            first (input) layer and the hidden layer, that is to say, the second
+            weights vector in the first layer. Note that PyTorch will cannot freeze
+            other sublayers, so the loss function will appear to be noisy.""",
+    type=int,
+    default=0,
+)
+parser.add_argument("-o", "--orbit_speed",
+    help="Speed at which the plot rotates (or viewer orbits)",
+    type=float,
+    default=0.2,
+)
+parser.add_argument("-lr", "--learning_rate",
+    help="""Learning rate during gradient decent (only affects visualization,
+            models should be pre-trained""",
+    type=float,
+    default=0.002,
+)
+parser.add_argument("-e", "--epochs",
+    help="Number of epoch to train before re-randomizing, and re-training.",
+    type=int,
+    default=64,
+)
+parser.add_argument("-r", "--resolution",
+    help="""Defines n, where loss surface is an nxn grid streched over the x and
+            y bounds. Note: large resolutions may be difficult to compute.""",
+    type=int,
+    default=200,
+)
+parser.add_argument("-x", "--x_bounds",
+    help="Defines x bounds of loss surface, e.g. '-x -8 8'",
+    type=int,
+    nargs=2,
+    default=(-8,8),
+)
+parser.add_argument("-y", "--y_bounds",
+    help="Defines y bounds of loss surface, e.g. '-y -8 8'",
+    type=int,
+    nargs=2,
+    default=(-8,8),
+)
+
+args = parser.parse_args()
 
 ## build a QApplication before building other widgets
 pg.mkQApp()
@@ -51,13 +112,13 @@ def create_loss_surface(
         targets,
         layer,
         sub_layer=0,
-        x_bound=(-6,6),
-        y_bound=(-6,6),
+        x_bounds=(-8,8),
+        y_bounds=(-8,8),
         resolution=250,
     ):
     with t.no_grad():
-        x_values = np.linspace(*x_bound,resolution)
-        y_values = np.linspace(*y_bound,resolution)
+        x_values = np.linspace(*x_bounds,resolution)
+        y_values = np.linspace(*y_bounds,resolution)
         surface = np.empty((len(x_values),len(y_values)))
 
         w = net.get_nth_layer(layer,sub_layer).data
@@ -79,8 +140,8 @@ def descend_gradient(
         layer,
         sub_layer=0,
         lr=0.002,
-        momentum=0.9,
-        epochs=8000,
+        momentum=0.0,
+        epochs=100,
         size=10,
         orbit_speed=0.05
     ):
@@ -95,15 +156,13 @@ def descend_gradient(
         colors[:,3] = 1 # opacity
 
         w = net.get_nth_layer(layer,sub_layer)
-        w.data[:] = t.rand(w.shape) *8 -4
+        w.data[:] = t.rand(w.shape) *12 -6
         # lock all weight except visible layer
         for i,param in enumerate(net.parameters()):
             if i != layer:
                 param.requires_grad = False
 
         for i in range(epochs):
-            loss = net._one_epoch(inputs,targets,lr=lr,momentum=momentum)
-
             points[i,:2] = w.detach().numpy()
             #points[i,2] = loss.item()
             outputs = net.forward(inputs).detach()
@@ -113,6 +172,8 @@ def descend_gradient(
             colors[:i+1,0] = np.linspace(1,0,i+1)
             scatter.setData(pos=points[:i+1], color=colors[:i+1])
             path.setData(pos=points[:i+1])
+
+            loss = net._one_epoch(inputs,targets,lr=lr,momentum=momentum)
 
             pg.QtGui.QApplication.processEvents()
             view.orbit(orbit_speed,0)
@@ -145,7 +206,9 @@ def run_simulation(
                 *data,
                 layer,
                 sub_layer,
-                resolution=resolution,
+                x_bounds=args.x_bounds,
+                y_bounds=args.y_bounds,
+                resolution=args.resolution,
             )
     surface.setData(x=x, y=y, z=z)
 
@@ -154,17 +217,23 @@ def run_simulation(
         pg.QtGui.QApplication.processEvents()
 
     while not view.isHidden():
-        descend_gradient(nn, *data, layer, sub_layer, epochs=80,
-                orbit_speed=orbit_speed)
+        descend_gradient(
+                nn,
+                *data,
+                layer,
+                sub_layer,
+                epochs=args.epochs,
+                orbit_speed=args.orbit_speed,
+        )
         view.orbit(orbit_speed,0)
         pg.QtGui.QApplication.processEvents()
 
 def main():
-    nn = t.load('xsquared_network0.93')
+    nn = t.load(args.filename)
     run_simulation(
             nn,
-            layer=0,
-            sub_layer=1
+            layer=args.layer,
+            sub_layer=args.sub_layer,
     )
 
 if __name__ == "__main__": main()
